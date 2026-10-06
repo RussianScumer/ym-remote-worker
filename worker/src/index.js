@@ -13,7 +13,7 @@ const int = (v, max) => (Number.isInteger(v) && v >= 0 && v <= max ? v : null);
 function cleanRes(d) {
   const res = { type: "res", rid: d.rid, ok: !!d.ok };
   if (!d.ok) res.error = str(d.error || "Ошибка", 200);
-  if (d.what === "likes") res.what = "likes";
+  if (d.what === "likes" || d.what === "search") res.what = d.what;
   if (int(d.offset, 100000) !== null) res.offset = d.offset;
   if (int(d.total, 100000) !== null) res.total = d.total;
   if (Array.isArray(d.items)) {
@@ -139,14 +139,19 @@ export class Room {
 
     if (!RID_RE.test(data.rid)) return;
     const from = tag.slice(2);
+    const q = typeof data.q === "string" ? data.q.trim().slice(0, 100) : "";
     let out = null;
     if (data.type === "req" && data.what === "likes" && int(data.offset, 100000) !== null) {
       out = { type: "req", from, rid: data.rid, what: "likes", offset: data.offset };
+    } else if (data.type === "req" && data.what === "search" && q) {
+      out = { type: "req", from, rid: data.rid, what: "search", q };
     } else if (
       data.type === "play" && data.src === "likes" &&
       int(data.index, 100000) !== null && ID_RE.test(data.trackId)
     ) {
       out = { type: "play", from, rid: data.rid, src: "likes", index: data.index, trackId: data.trackId };
+    } else if (data.type === "play" && data.src === "search" && q && ID_RE.test(data.trackId)) {
+      out = { type: "play", from, rid: data.rid, src: "search", q, trackId: data.trackId };
     }
     if (!out) return;
     if (this.ctx.getWebSockets("player").length === 0) {

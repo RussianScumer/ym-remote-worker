@@ -188,6 +188,18 @@
   .track.off { opacity: .4; }
   .track.busy { background: var(--ghost); animation: pulse 1s infinite alternate; }
   @keyframes pulse { to { opacity: .55; } }
+  .sform { display: flex; gap: 8px; }
+  .sform input {
+    flex: 1; min-width: 0;
+    padding: 12px 16px; border: 0; border-radius: 999px;
+    background: var(--ghost); color: var(--ink);
+    font: 400 16px "Manrope", system-ui, sans-serif;
+    -webkit-appearance: none; appearance: none;
+  }
+  .sform input::placeholder { color: var(--ink-soft); }
+  .sform input:focus-visible { outline: 3px solid var(--sun); outline-offset: 2px; }
+  .sform button { width: 46px; height: 46px; flex: none; background: var(--sun); color: var(--sun-ink); }
+  .sform button svg { width: 22px; height: 22px; }
   .msg { margin: 0; padding: 16px 0; text-align: center; color: var(--ink-soft); font-size: 14px; }
   .msg button { display: inline; margin-left: 6px; color: var(--sun); font: inherit; text-decoration: underline; border-radius: 0; }
 
@@ -253,6 +265,16 @@
     <ul class="tracks" id="lList"></ul>
   </section>
 
+  <section class="view" id="vSearch" hidden>
+    <form class="sform" id="sForm" role="search">
+      <input id="sInput" type="search" enterkeyhint="search" maxlength="100" placeholder="Трек или исполнитель" aria-label="Поиск" autocomplete="off">
+      <button type="submit" aria-label="Найти">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/></svg>
+      </button>
+    </form>
+    <ul class="tracks" id="sList"></ul>
+  </section>
+
   <nav class="tabs" role="tablist">
     <button role="tab" data-v="vPlayer" aria-selected="true">
       <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.14v13.72a.6.6 0 0 0 .92.5l10.6-6.86a.6.6 0 0 0 0-1L8.92 4.64a.6.6 0 0 0-.92.5z"/></svg>
@@ -261,6 +283,10 @@
     <button role="tab" data-v="vLikes" aria-selected="false">
       <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 20.5s-7.5-4.6-7.5-10.3A4.2 4.2 0 0 1 12 7.6a4.2 4.2 0 0 1 7.5 2.6c0 5.7-7.5 10.3-7.5 10.3z"/></svg>
       Мне нравится
+    </button>
+    <button role="tab" data-v="vSearch" aria-selected="false">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/></svg>
+      Поиск
     </button>
   </nav>
 </main>
@@ -373,7 +399,7 @@
   }
 
   function showView(id) {
-    ["vPlayer", "vLikes"].forEach(function (v) { $(v).hidden = v !== id; });
+    ["vPlayer", "vLikes", "vSearch"].forEach(function (v) { $(v).hidden = v !== id; });
     document.querySelectorAll(".tabs button").forEach(function (b) {
       b.setAttribute("aria-selected", String(b.dataset.v === id));
     });
@@ -388,7 +414,7 @@
     return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0");
   }
 
-  function trackItem(t, i) {
+  function trackItem(t, onTap) {
     var li = document.createElement("li");
     var b = document.createElement("button");
     b.className = "track" + (t.ok && t.id ? "" : " off");
@@ -401,7 +427,7 @@
     text.append(title, artist);
     var time = document.createElement("time"); time.textContent = t.dur ? fmt(t.dur) : "";
     b.append(img, text, time);
-    b.onclick = function () { playLike(i, b); };
+    b.onclick = function () { onTap(b); };
     li.append(b);
     return li;
   }
@@ -431,7 +457,10 @@
       likes.loading = false;
       if (!res.ok) { likes.error = res.error || "Не удалось загрузить"; likesMsg(); return; }
       var frag = document.createDocumentFragment(), start = likes.items.length;
-      (res.items || []).forEach(function (t, k) { likes.items.push(t); frag.append(trackItem(t, start + k)); });
+      (res.items || []).forEach(function (t, k) {
+        likes.items.push(t);
+        frag.append(trackItem(t, function (b) { playLike(start + k, b); }));
+      });
       $("lList").append(frag);
       likes.total = res.total;
       likes.at = Date.now();
@@ -447,18 +476,52 @@
         l.scrollTop + l.clientHeight > l.scrollHeight - 600) loadLikes(false);
   });
 
-  function playLike(i, btn) {
-    var t = likes.items[i];
+  // Вкладке нужно перейти на нужную страницу и долистать до трека — это может занять время.
+  function play(t, msg, btn) {
     if (!t || !t.ok || !t.id || !connected || !online) return;
     if (navigator.vibrate) navigator.vibrate(8);
     if (btn) btn.classList.add("busy");
-    // Вкладке нужно перейти на страницу лайков и долистать до трека — это может занять время.
-    request({ type: "play", src: "likes", index: i, trackId: t.id }, 45000).then(function (res) {
+    msg.type = "play";
+    msg.trackId = t.id;
+    request(msg, 45000).then(function (res) {
       if (btn) btn.classList.remove("busy");
       if (res.ok) showView("vPlayer");
       else toast(res.error || "Не получилось включить трек");
     });
   }
+  function playLike(i, btn) { play(likes.items[i], { src: "likes", index: i }, btn); }
+
+  // Поиск: одна страница результатов (как вкладка «Треки» на сайте).
+  var search = { q: "", seq: 0 };
+  function searchMsg(text) {
+    var old = $("sMsg");
+    if (old) old.remove();
+    if (!text) return;
+    var li = document.createElement("li");
+    li.id = "sMsg"; li.className = "msg"; li.textContent = text;
+    $("sList").append(li);
+  }
+  $("sForm").onsubmit = function (e) {
+    e.preventDefault();
+    var q = $("sInput").value.trim();
+    if (!q) return;
+    $("sInput").blur(); // убираем клавиатуру, чтобы были видны результаты
+    var my = ++search.seq;
+    search.q = q;
+    $("sList").textContent = "";
+    searchMsg("Ищу…");
+    request({ type: "req", what: "search", q: q }).then(function (res) {
+      if (my !== search.seq) return; // уже ищем другое
+      searchMsg("");
+      if (!res.ok) { searchMsg(res.error || "Не удалось найти"); return; }
+      var frag = document.createDocumentFragment();
+      (res.items || []).forEach(function (t) {
+        frag.append(trackItem(t, function (b) { play(t, { src: "search", q: q }, b); }));
+      });
+      $("sList").append(frag);
+      if (!(res.items || []).length) searchMsg("Ничего не нашлось");
+    });
+  };
   $("playAll").onclick = function () {
     var first = likes.items.findIndex(function (t) { return t.ok && t.id; });
     if (first >= 0) playLike(first, null);

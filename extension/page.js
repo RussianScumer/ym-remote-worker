@@ -74,6 +74,19 @@
     return likes;
   };
 
+  // Тот же запрос, что делает вкладка «Треки» на странице поиска, — порядок
+  // результатов совпадает с порядком строк на ней.
+  const searchTracks = async (q) => {
+    const r = await apiGet(
+      "/search/instant/mixed?text=" + encodeURIComponent(q) +
+      "&type=album,artist,playlist,track,ugc_track,wave,podcast,podcast_episode,clip,concert" +
+      "&page=0&filter=track&pageSize=36&withLikesCount=true&withBestResults=false"
+    );
+    return (r.results || [])
+      .filter((x) => (x.type === "track" || x.type === "ugc_track") && x.track)
+      .map((x) => norm(x.track));
+  };
+
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   // Ждём элемент опросом: setTimeout работает и в фоновой вкладке (пусть и раз в секунду).
   const waitFor = async (fn, timeout = 10000) => {
@@ -160,11 +173,59 @@
     await playRow(index, trackId);
   };
 
+  const visible = (el) => el.getBoundingClientRect().width > 0;
+
+  // Страница поиска: вкладка «Треки», дальше листаем, пока не появится строка
+  // нужного трека. Ищем только среди видимых: в DOM остаются строки прошлых страниц.
+  const playSearch = async (q, trackId) => {
+    await whenVisible();
+    if (!(await navigate("/search?text=" + encodeURIComponent(q)))) throw new Error("Не удалось открыть поиск");
+    const tab = await waitFor(() =>
+      [...document.querySelectorAll('[role="tab"]')].find((e) => e.textContent.trim() === "Треки")
+    );
+    if (!tab) throw new Error("Нет вкладки «Треки» в поиске");
+    if (tab.getAttribute("aria-selected") !== "true") tab.click();
+    const sel = `main a[href$="/track/${trackId}"]`;
+    const anyRow = await waitFor(() =>
+      tab.getAttribute("aria-selected") === "true" &&
+      [...document.querySelectorAll('main a[href*="/track/"]')].find(visible)
+    );
+    if (!anyRow) throw new Error("Результаты поиска не загрузились");
+    let sc = anyRow.parentElement;
+    while (sc && !/auto|scroll/.test(getComputedStyle(sc).overflowY)) sc = sc.parentElement;
+    let link = null;
+    for (let i = 0; i < 30; i++) {
+      link = [...document.querySelectorAll(sel)].find(visible);
+      if (link || !sc) break;
+      const before = sc.scrollTop;
+      sc.scrollTop += sc.clientHeight * 0.8;
+      await sleep(400);
+      if (sc.scrollTop === before) { // дошли до конца списка
+        link = [...document.querySelectorAll(sel)].find(visible);
+        break;
+      }
+    }
+    if (!link) throw new Error("Трек не нашёлся на странице поиска");
+    let row = link;
+    while (row && !row.querySelector('button[aria-label="Воспроизведение"], button[aria-label="Пауза"]')) row = row.parentElement;
+    if (!row) throw new Error("Нет кнопки воспроизведения");
+    const btn = row.querySelector('button[aria-label="Воспроизведение"], button[aria-label="Пауза"]');
+    if (btn.getAttribute("aria-label") === "Воспроизведение") btn.click();
+  };
+
   const handle = async (d) => {
     if (d.__ymr === "req" && d.what === "likes") {
       const offset = d.offset | 0;
       const l = await loadLikes(offset === 0);
       return { what: "likes", offset, total: l.items.length, items: l.items.slice(offset, offset + 50) };
+    }
+    if (d.__ymr === "req" && d.what === "search") {
+      const items = await searchTracks(String(d.q || ""));
+      return { what: "search", total: items.length, items };
+    }
+    if (d.__ymr === "play" && d.src === "search") {
+      await playSearch(String(d.q || ""), String(d.trackId));
+      return {};
     }
     if (d.__ymr === "play" && d.src === "likes") {
       await playLikes(d.index | 0, String(d.trackId));
