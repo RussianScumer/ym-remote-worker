@@ -123,6 +123,15 @@
   }
   .play svg { width: 44px; height: 44px; }
 
+  .wave {
+    align-self: center;
+    display: flex; gap: 10px; align-items: center;
+    padding: 12px 22px; border-radius: 999px;
+    background: var(--ghost); color: var(--ink);
+    font: 600 15px "Manrope", system-ui, sans-serif;
+  }
+  .wave svg { width: 20px; height: 20px; }
+
   .empty {
     margin: auto 0; text-align: center; line-height: 1.5; color: var(--ink-soft);
   }
@@ -160,6 +169,11 @@
       <svg viewBox="0 0 24 24" fill="currentColor"><path d="M16 5h2v14h-2zM4 5.5v13a.5.5 0 0 0 .77.42l9.73-6.5a.5.5 0 0 0 0-.84L4.77 5.08A.5.5 0 0 0 4 5.5z"/></svg>
     </button>
   </div>
+
+  <button class="wave" id="wave" disabled>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M2 12c2-4 4-4 6 0s4 4 6 0 4-4 6 0"/></svg>
+    Моя волна
+  </button>
 </main>
 
 <script>
@@ -186,7 +200,7 @@
   function render() {
     setStatus();
     var can = connected && online;
-    ["prev", "toggle", "next"].forEach(function (id) { $(id).disabled = !can; });
+    ["prev", "toggle", "next", "wave"].forEach(function (id) { $(id).disabled = !can; });
 
     var st = state || {};
     $("title").textContent = st.title || (online ? "Ничего не играет" : "—");
@@ -244,6 +258,7 @@
   $("prev").onclick = function () { send("prev"); };
   $("next").onclick = function () { send("next"); };
   $("toggle").onclick = function () { send("toggle"); };
+  $("wave").onclick = function () { send("wave"); };
 
   // Телефон «усыпляет» соединение в фоне — при возврате переподключаемся сразу.
   document.addEventListener("visibilitychange", function () {

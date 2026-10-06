@@ -1,7 +1,7 @@
 import REMOTE_HTML from "./remote.html";
 
 const ROOM_RE = /^[a-f0-9]{32}$/;
-const ACTIONS = new Set(["prev", "next", "toggle"]);
+const ACTIONS = new Set(["prev", "next", "toggle", "wave"]);
 
 export default {
   async fetch(request, env) {
