@@ -21,6 +21,7 @@
     --ghost: rgba(255, 255, 255, 0.12);
     --ok: #7ee2a8;
     --warn: #ffb37a;
+    --ink-inv: #1d1630;
     box-sizing: border-box;
     padding-top: env(safe-area-inset-top, 0px);
     padding-bottom: env(safe-area-inset-bottom, 0px);
@@ -33,6 +34,7 @@
       --ghost: rgba(29, 22, 48, 0.08);
       --ok: #198754;
       --warn: #b8560f;
+      --ink-inv: #faf7ff;
     }
   }
   *, *::before, *::after { box-sizing: inherit; }
@@ -58,11 +60,19 @@
     height: 100%;
     max-width: 440px;
     margin: 0 auto;
-    padding: 20px 28px 32px;
+    padding: 20px 0 0;
     display: flex;
     flex-direction: column;
-    gap: 24px;
+    gap: 16px;
   }
+  .status, .view { padding: 0 28px; }
+  .view {
+    flex: 1; min-height: 0;
+    display: flex; flex-direction: column; gap: 24px;
+    padding-bottom: 8px;
+  }
+  .view[hidden] { display: none; }
+  #vPlayer { gap: 20px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--ghost) transparent; }
   .status {
     display: flex; align-items: center; gap: 8px;
     font-size: 14px; color: var(--ink-soft);
@@ -72,9 +82,9 @@
   .status[data-s="warn"] .dot { background: var(--warn); }
 
   .cover {
-    width: 100%;
+    width: min(100%, 36vh);
     aspect-ratio: 1;
-    max-height: 46vh;
+    flex: none;
     align-self: center;
     border-radius: 18px;
     background: var(--ghost);
@@ -132,12 +142,70 @@
   }
   .wave svg { width: 20px; height: 20px; }
 
+  .tabs {
+    display: flex; justify-content: space-around;
+    padding: 6px 12px 10px;
+    border-top: 1px solid var(--ghost);
+  }
+  .tabs button {
+    border-radius: 14px; padding: 6px 18px;
+    display: flex; flex-direction: column; align-items: center; gap: 3px;
+    font: 600 12px "Manrope", system-ui, sans-serif;
+    color: var(--ink-soft);
+  }
+  .tabs button svg { width: 24px; height: 24px; }
+  .tabs button[aria-selected="true"] { color: var(--ink); }
+  .tabs button[aria-selected="true"] svg { color: var(--sun); }
+
+  .lhead { display: flex; align-items: center; gap: 12px; }
+  .lhead h2 {
+    margin: 0; flex: 1; min-width: 0;
+    font: 700 20px "Unbounded", "Manrope", system-ui, sans-serif;
+  }
+  .lhead small { display: block; margin-top: 4px; font: 400 13px "Manrope", system-ui, sans-serif; color: var(--ink-soft); }
+  .pill {
+    border-radius: 999px; padding: 10px 18px;
+    background: var(--sun); color: var(--sun-ink);
+    font: 600 14px "Manrope", system-ui, sans-serif;
+  }
+  .tracks {
+    list-style: none; margin: 0 -28px; padding: 0 16px;
+    flex: 1; min-height: 0; overflow-x: hidden; overflow-y: auto;
+    scrollbar-width: thin; scrollbar-color: var(--ghost) transparent;
+  }
+  .track {
+    width: 100%; border-radius: 12px; padding: 6px 12px;
+    display: grid; grid-template-columns: 48px minmax(0, 1fr) auto; gap: 12px;
+    align-items: center; justify-items: stretch;
+    text-align: left; font: inherit;
+  }
+  .track:active { transform: none; background: var(--ghost); }
+  .track img, .track .ph { width: 48px; height: 48px; border-radius: 8px; object-fit: cover; background: var(--ghost); display: block; }
+  .track b, .track span { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .track b { font-weight: 600; font-size: 15px; }
+  .track span { font-size: 13px; color: var(--ink-soft); margin-top: 2px; }
+  .track time { font-size: 13px; color: var(--ink-soft); }
+  .track.off { opacity: .4; }
+  .track.busy { background: var(--ghost); animation: pulse 1s infinite alternate; }
+  @keyframes pulse { to { opacity: .55; } }
+  .msg { margin: 0; padding: 16px 0; text-align: center; color: var(--ink-soft); font-size: 14px; }
+  .msg button { display: inline; margin-left: 6px; color: var(--sun); font: inherit; text-decoration: underline; border-radius: 0; }
+
+  #toast {
+    position: fixed; left: 50%; bottom: 96px; transform: translateX(-50%);
+    max-width: calc(100% - 32px);
+    padding: 10px 16px; border-radius: 12px;
+    background: var(--ink); color: var(--ink-inv); font-size: 14px;
+  }
+  #toast[hidden] { display: none; }
+
   .empty {
-    margin: auto 0; text-align: center; line-height: 1.5; color: var(--ink-soft);
+    margin: auto 0; padding: 0 28px; text-align: center; line-height: 1.5; color: var(--ink-soft);
   }
   .empty h1 { color: var(--ink); -webkit-line-clamp: unset; }
   @media (prefers-reduced-motion: reduce) {
     #bg, button { transition: none; }
+    .track.busy { animation: none; }
   }
 </style>
 </head>
@@ -150,6 +218,7 @@
     <span class="dot"></span><span id="statusText">Подключение…</span>
   </div>
 
+  <section class="view" id="vPlayer">
   <div class="cover"><img id="art" alt="" hidden></div>
 
   <div class="meta">
@@ -163,7 +232,7 @@
     </button>
     <button class="play" id="toggle" aria-label="Воспроизвести" disabled>
       <svg id="icPlay" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.14v13.72a.6.6 0 0 0 .92.5l10.6-6.86a.6.6 0 0 0 0-1L8.92 4.64a.6.6 0 0 0-.92.5z"/></svg>
-      <svg id="icPause" viewBox="0 0 24 24" fill="currentColor" hidden><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>
+      <svg id="icPause" viewBox="0 0 24 24" fill="currentColor" style="display:none"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>
     </button>
     <button class="skip" id="next" aria-label="Следующий трек" disabled>
       <svg viewBox="0 0 24 24" fill="currentColor"><path d="M16 5h2v14h-2zM4 5.5v13a.5.5 0 0 0 .77.42l9.73-6.5a.5.5 0 0 0 0-.84L4.77 5.08A.5.5 0 0 0 4 5.5z"/></svg>
@@ -174,7 +243,28 @@
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M2 12c2-4 4-4 6 0s4 4 6 0 4-4 6 0"/></svg>
     Моя волна
   </button>
+  </section>
+
+  <section class="view" id="vLikes" hidden>
+    <div class="lhead">
+      <h2>Мне нравится<small id="lCount"></small></h2>
+      <button class="pill" id="playAll" disabled>Играть всё</button>
+    </div>
+    <ul class="tracks" id="lList"></ul>
+  </section>
+
+  <nav class="tabs" role="tablist">
+    <button role="tab" data-v="vPlayer" aria-selected="true">
+      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.14v13.72a.6.6 0 0 0 .92.5l10.6-6.86a.6.6 0 0 0 0-1L8.92 4.64a.6.6 0 0 0-.92.5z"/></svg>
+      Плеер
+    </button>
+    <button role="tab" data-v="vLikes" aria-selected="false">
+      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 20.5s-7.5-4.6-7.5-10.3A4.2 4.2 0 0 1 12 7.6a4.2 4.2 0 0 1 7.5 2.6c0 5.7-7.5 10.3-7.5 10.3z"/></svg>
+      Мне нравится
+    </button>
+  </nav>
 </main>
+<div id="toast" role="status" hidden></div>
 
 <script>
 (function () {
@@ -182,6 +272,8 @@
   var $ = function (id) { return document.getElementById(id); };
   var ws = null, retry = 0, pingTimer = null, reconnectTimer = null;
   var state = null, online = false, connected = false;
+  var pending = {}, seq = 0, toastTimer = null;
+  var likes = { items: [], total: null, loading: false, at: 0, error: "" };
 
   if (!/^[a-f0-9]{32}$/.test(room)) {
     $("app").innerHTML =
@@ -200,7 +292,8 @@
   function render() {
     setStatus();
     var can = connected && online;
-    ["prev", "toggle", "next", "wave"].forEach(function (id) { $(id).disabled = !can; });
+    ["prev", "toggle", "next", "wave", "playAll"].forEach(function (id) { $(id).disabled = !can; });
+    $("playAll").disabled = !can || !likes.items.length;
 
     var st = state || {};
     $("title").textContent = st.title || (online ? "Ничего не играет" : "—");
@@ -216,8 +309,9 @@
       $("bg").style.backgroundImage = "";
     }
 
-    $("icPlay").hidden = !!st.playing;
-    $("icPause").hidden = !st.playing;
+    // У <svg> атрибут hidden не работает, скрываем через style.
+    $("icPlay").style.display = st.playing ? "none" : "";
+    $("icPause").style.display = st.playing ? "" : "none";
     $("toggle").setAttribute("aria-label", st.playing ? "Пауза" : "Воспроизвести");
     document.title = st.title ? st.title + " — пульт" : "Пульт";
   }
@@ -236,13 +330,16 @@
     ws.onmessage = function (e) {
       if (e.data === "pong") return;
       var d; try { d = JSON.parse(e.data); } catch (_) { return; }
+      if (d.type === "res") { var p = pending[d.rid]; if (p) p(d); return; }
       if (d.type === "hello") { online = d.playerOnline; if (d.state) state = d.state; }
       else if (d.type === "state") { state = d.state; online = true; }
       else if (d.type === "player") { online = d.online; }
       render();
     };
     ws.onclose = function () {
-      connected = false; clearInterval(pingTimer); render();
+      connected = false; clearInterval(pingTimer);
+      Object.keys(pending).forEach(function (rid) { pending[rid]({ ok: false, error: "Связь прервалась" }); });
+      render();
       reconnectTimer = setTimeout(connect, Math.min(10000, 500 * Math.pow(2, retry++)));
     };
     ws.onerror = function () { try { ws.close(); } catch (_) {} };
@@ -254,6 +351,118 @@
     if (navigator.vibrate) navigator.vibrate(8);
     if (action === "toggle" && state) { state.playing = !state.playing; render(); }
   }
+
+  // Запрос к расширению с ответом: rid связывает запрос и ответ.
+  function request(msg, timeout) {
+    return new Promise(function (resolve) {
+      if (!ws || ws.readyState !== 1) return resolve({ ok: false, error: "Нет связи с сервером" });
+      var rid = "q" + (++seq);
+      var timer = setTimeout(function () { done({ ok: false, error: "Компьютер не ответил" }); }, timeout || 20000);
+      function done(res) { clearTimeout(timer); delete pending[rid]; resolve(res); }
+      pending[rid] = done;
+      msg.rid = rid;
+      ws.send(JSON.stringify(msg));
+    });
+  }
+
+  function toast(text) {
+    var t = $("toast");
+    t.textContent = text; t.hidden = false;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { t.hidden = true; }, 3500);
+  }
+
+  function showView(id) {
+    ["vPlayer", "vLikes"].forEach(function (v) { $(v).hidden = v !== id; });
+    document.querySelectorAll(".tabs button").forEach(function (b) {
+      b.setAttribute("aria-selected", String(b.dataset.v === id));
+    });
+    if (id === "vLikes" && (!likes.items.length || Date.now() - likes.at > 5 * 60000)) loadLikes(true);
+  }
+  document.querySelectorAll(".tabs button").forEach(function (b) {
+    b.onclick = function () { showView(b.dataset.v); };
+  });
+
+  function fmt(ms) {
+    var s = Math.round(ms / 1000);
+    return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0");
+  }
+
+  function trackItem(t, i) {
+    var li = document.createElement("li");
+    var b = document.createElement("button");
+    b.className = "track" + (t.ok && t.id ? "" : " off");
+    var img;
+    if (t.cover) { img = document.createElement("img"); img.src = t.cover; img.loading = "lazy"; img.alt = ""; }
+    else { img = document.createElement("div"); img.className = "ph"; }
+    var text = document.createElement("div");
+    var title = document.createElement("b"); title.textContent = t.title;
+    var artist = document.createElement("span"); artist.textContent = t.artist;
+    text.append(title, artist);
+    var time = document.createElement("time"); time.textContent = t.dur ? fmt(t.dur) : "";
+    b.append(img, text, time);
+    b.onclick = function () { playLike(i, b); };
+    li.append(b);
+    return li;
+  }
+
+  function likesMsg() {
+    var list = $("lList"), old = $("lMsg");
+    if (old) old.remove();
+    var text = likes.loading ? "Загружаю…" : likes.error ? likes.error : (likes.total === 0 ? "Здесь пока пусто" : "");
+    if (!text) return;
+    var li = document.createElement("li");
+    li.id = "lMsg"; li.className = "msg"; li.textContent = text;
+    if (likes.error && !likes.loading) {
+      var retry = document.createElement("button");
+      retry.textContent = "Повторить";
+      retry.onclick = function () { loadLikes(!likes.items.length); };
+      li.append(retry);
+    }
+    list.append(li);
+  }
+
+  function loadLikes(reset) {
+    if (likes.loading) return;
+    if (reset) { likes.items = []; likes.total = null; $("lList").textContent = ""; $("lList").scrollTop = 0; }
+    likes.loading = true; likes.error = "";
+    likesMsg();
+    request({ type: "req", what: "likes", offset: likes.items.length }).then(function (res) {
+      likes.loading = false;
+      if (!res.ok) { likes.error = res.error || "Не удалось загрузить"; likesMsg(); return; }
+      var frag = document.createDocumentFragment(), start = likes.items.length;
+      (res.items || []).forEach(function (t, k) { likes.items.push(t); frag.append(trackItem(t, start + k)); });
+      $("lList").append(frag);
+      likes.total = res.total;
+      likes.at = Date.now();
+      $("lCount").textContent = res.total ? res.total + " треков" : "";
+      likesMsg();
+      render();
+    });
+  }
+
+  $("lList").addEventListener("scroll", function () {
+    var l = $("lList");
+    if (!likes.loading && !likes.error && likes.total !== null && likes.items.length < likes.total &&
+        l.scrollTop + l.clientHeight > l.scrollHeight - 600) loadLikes(false);
+  });
+
+  function playLike(i, btn) {
+    var t = likes.items[i];
+    if (!t || !t.ok || !t.id || !connected || !online) return;
+    if (navigator.vibrate) navigator.vibrate(8);
+    if (btn) btn.classList.add("busy");
+    // Вкладке нужно перейти на страницу лайков и долистать до трека — это может занять время.
+    request({ type: "play", src: "likes", index: i, trackId: t.id }, 45000).then(function (res) {
+      if (btn) btn.classList.remove("busy");
+      if (res.ok) showView("vPlayer");
+      else toast(res.error || "Не получилось включить трек");
+    });
+  }
+  $("playAll").onclick = function () {
+    var first = likes.items.findIndex(function (t) { return t.ok && t.id; });
+    if (first >= 0) playLike(first, null);
+  };
 
   $("prev").onclick = function () { send("prev"); };
   $("next").onclick = function () { send("next"); };

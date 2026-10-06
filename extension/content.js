@@ -29,8 +29,12 @@
     if (e.data.__ymr === "state") {
       lastState = e.data.state;
       if (port) port.postMessage({ type: "state", state: lastState });
-    } else if (e.data.__ymr === "ack" && !e.data.ok) {
-      clickFallback(e.data.action);
+    } else if (e.data.__ymr === "ack") {
+      if (!e.data.ok) clickFallback(e.data.action);
+      if (port) port.postMessage({ type: "ack", action: e.data.action, ok: e.data.ok });
+    } else if (e.data.__ymr === "res" && port) {
+      const { __ymr, ...res } = e.data;
+      port.postMessage({ ...res, type: "res" });
     }
   });
 
@@ -42,6 +46,7 @@
     }
     port.onMessage.addListener((msg) => {
       if (msg.type === "cmd") window.postMessage({ __ymr: "cmd", action: msg.action }, "*");
+      else if (msg.type === "req" || msg.type === "play") window.postMessage({ ...msg, __ymr: msg.type }, "*");
     });
     port.onDisconnect.addListener(() => {
       port = null;
