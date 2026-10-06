@@ -161,6 +161,14 @@ chrome.runtime.onConnect.addListener((port) => {
   ensureWs();
 });
 
+// Адрес общего воркера по умолчанию; в попапе его можно заменить на свой.
+const DEFAULT_SERVER = "https://ym-remote-worker.mishkailia2003.workers.dev";
+
+chrome.runtime.onInstalled.addListener(async () => {
+  const { server } = await chrome.storage.local.get("server");
+  if (!server) await chrome.storage.local.set({ server: DEFAULT_SERVER });
+});
+
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area === "local" && (changes.server || changes.room)) {
     wsUrl = ""; // форсируем переподключение с новыми настройками
